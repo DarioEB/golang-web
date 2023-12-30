@@ -15,52 +15,53 @@ services:
     volumes:
       - golang-api-sample-volume:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: [
-        "CMD",
-        "curl",
-        "-f",
-        "http://localhost:3306/health?ready=1"
-      ]
-      interval: 10s
-      timeout: 30s
-      retries: 5
-      start_period: 10s
-    networks:
-      - golang-api-sample-network
+    # healthcheck:
+    #   test: [
+    #     "CMD",
+    #     "curl",
+    #     "-f",
+    #     "http://localhost:3306/health?ready=1"
+    #   ]
+    #   interval: 5s
+    #   timeout: 10s
+    #   retries: 5
+    #   start_period: 5s
+    # networks:
+    #   - golang-api-sample-network
     ports:
       - "3306:3306"
 
-  golang-api-sample:
-    container_name: golang-api-sample
-    restart: always
-    depends_on:
-      golang-database:
-        condition: service_healthy
-    build:
-      context: .
-      dockerfile: ./docker/app/Dockerfile
-    environment:
-      DATABASE_USER: gouser
-      DATABASE_PASSWORD: gopass
-      DATABASE_HOST: golang-database
-      DATABASE_PORT: 3306
-      DATABASE_NAME: golang_api_sample
-      DATABASE_DEBUG: true
-      DATABASE_MIGRATE: true
-    networks:
-      - golang-api-sample-network
-    ports:
-      - 3000:3000
+#   golang-api-sample:
+#     container_name: golang-api-sample
+#     restart: always
+#     depends_on:
+#       golang-database:
+#         condition: service_healthy
+#     build:
+#       context: .
+#       dockerfile: ./docker/app/Dockerfile
+#     environment:
+#       SERVER_PORT: 3000
+#       DATABASE_USER: gouser
+#       DATABASE_PASSWORD: gopass
+#       DATABASE_HOST: golang-database
+#       DATABASE_PORT: 3306
+#       DATABASE_NAME: golang_api_sample
+#       DATABASE_DEBUG: true
+#       DATABASE_MIGRATE: true
+#     networks:
+#       - golang-api-sample-network
+#     ports:
+#       - 3000:3000
     
 
 volumes:
   golang-api-sample-volume:
     name: "golang-api-sample-volume"
 
-networks:
-  golang-api-sample-network:
-    name: "golang-api-sample-network"
-  golang-api-external-network:
-    name: "golang-api-external-network"
-    external: true
+# networks:
+#   golang-api-sample-network:
+#     name: "golang-api-sample-network"
+#   golang-api-external-network:
+#     name: "golang-api-external-network"
+#     external: true

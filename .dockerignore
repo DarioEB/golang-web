@@ -1,3 +1,6 @@
 .env.dist
 .gitignore
 docker-compose.yml
+.env
+main
+docker/

@@ -1,24 +1,28 @@
 package user
 
 import (
+	"fmt"
 	"log"
+	"strings"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-type Repository interface {
-	Create(user *User) (*User, error)
-	FindAll() ([]User, error)
-	FindOne(id string) (*User, error)
-	Delete(id string) (*User, error)
-	Update(id string, firstname, lastname, email, phone *string) (*User, error)
-}
+type (
+	Repository interface {
+		Create(user *User) (*User, error)
+		FindAll(filters Filters, offset, limit int) ([]User, error)
+		FindOne(id string) (*User, error)
+		Delete(id string) (*User, error)
+		Update(id string, firstname, lastname, email, phone *string) (*User, error)
+		Count(filters Filters) (int, error)
+	}
 
-type repo struct {
-	log *log.Logger
-	db  *gorm.DB
-}
+	repo struct {
+		log *log.Logger
+		db  *gorm.DB
+	}
+)
 
 func NewRepo(log *log.Logger, db *gorm.DB) Repository {
 	return &repo{
@@ -28,7 +32,6 @@ func NewRepo(log *log.Logger, db *gorm.DB) Repository {
 }
 
 func (repo *repo) Create(user *User) (*User, error) {
-	user.ID = uuid.New().String()
 	query := repo.db.Create(user)
 	if query.Error != nil {
 		repo.log.Println(query.Error)
@@ -38,9 +41,12 @@ func (repo *repo) Create(user *User) (*User, error) {
 	return user, nil
 }
 
-func (repo *repo) FindAll() ([]User, error) {
+func (repo *repo) FindAll(filters Filters, offset, limit int) ([]User, error) {
 	var u []User
-	result := repo.db.Model(&u).Order("created_at DESC").Find(&u)
+	tx := repo.db.Model(&u)
+	tx = applyFilters(tx, filters)
+	tx = tx.Limit(limit).Offset(offset)
+	result := tx.Order("created_at DESC").Find(&u)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -87,4 +93,27 @@ func (repo *repo) Update(id string, firstname, lastname, email, phone *string) (
 		return nil, result.Error
 	}
 	return &user, nil
+}
+
+func (repo *repo) Count(filters Filters) (int, error) {
+	var count int64
+	tx := repo.db.Model(User{})
+	tx = applyFilters(tx, filters)
+	if err := tx.Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}
+
+/* Mover a un Helper */
+func applyFilters(tx *gorm.DB, filters Filters) *gorm.DB {
+	if filters.Firstname != "" {
+		filters.Firstname = fmt.Sprintf("%%%s%%", strings.ToLower(filters.Firstname))
+		tx = tx.Where("lower(firstname) like ?", filters.Firstname)
+	}
+	if filters.Lastname != "" {
+		filters.Lastname = fmt.Sprintf("%%%s%%", strings.ToLower(filters.Lastname))
+		tx = tx.Where("lower(lastname) like ?", filters.Lastname)
+	}
+	return tx
 }

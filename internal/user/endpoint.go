@@ -2,8 +2,10 @@ package user
 
 import (
 	"encoding/json"
+	"go_sample_api/pkg/meta"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -32,8 +34,11 @@ type (
 		Phone     *string `json:"phone"`
 	}
 
-	ErrorRes struct {
-		Error string `json:"error"`
+	Response struct {
+		Status int         `json:"status"`
+		Data   interface{} `json:"data,omitempty"`
+		Err    string      `json:"error,omitempty"`
+		Meta   *meta.Meta  `json:"meta,omitempty"`
 	}
 )
 
@@ -53,19 +58,28 @@ func makeCreateEndpoint(log *log.Logger, s Service) Controller {
 		// Inject data in struct created: 'body'
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{"invalid_request_format"})
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    err.Error(),
+			})
 			return
 		}
 
 		if body.Firstname == "" {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{"Firstname is required"})
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    "firstname_is_required",
+			})
 			return
 		}
 
 		if body.Lastname == "" {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{"Lastname is required"})
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    "lastname_is_required",
+			})
 			return
 		}
 
@@ -73,7 +87,10 @@ func makeCreateEndpoint(log *log.Logger, s Service) Controller {
 		if err != nil {
 			log.Println("Error when trying to create user")
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{err.Error()})
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    err.Error(),
+			})
 			return
 		}
 
@@ -90,14 +107,20 @@ func makeDeleteEndpoint(log *log.Logger, s Service) Controller {
 
 		if err != nil {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{err.Error()})
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    err.Error(),
+			})
 			return
 		}
 
 		user, err := s.Delete(id)
 		if err != nil {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{err.Error()})
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    err.Error(),
+			})
 			return
 		}
 
@@ -112,19 +135,28 @@ func makeUpdateEndpoint(log *log.Logger, s Service) Controller {
 		var body PutRequestBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{"invalid request format"})
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    err.Error(),
+			})
 			return
 		}
 
 		if body.Firstname != nil && *body.Firstname == "" {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{"Firstname is required"})
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    "firstname_is_required",
+			})
 			return
 		}
 
 		if body.Lastname != nil && *body.Lastname == "" {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{"Lastname is required"})
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    "lastname_is_required",
+			})
 			return
 		}
 
@@ -134,7 +166,10 @@ func makeUpdateEndpoint(log *log.Logger, s Service) Controller {
 
 		if err != nil {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{err.Error()})
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    err.Error(),
+			})
 			return
 		}
 
@@ -147,7 +182,10 @@ func makeUpdateEndpoint(log *log.Logger, s Service) Controller {
 
 		if err != nil {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{err.Error()})
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    err.Error(),
+			})
 			return
 		}
 
@@ -164,7 +202,10 @@ func makeGetEndpoint(log *log.Logger, s Service) Controller {
 		user, err := s.Get(id)
 		if err != nil {
 			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{err.Error()})
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    err.Error(),
+			})
 			return
 		}
 		json.NewEncoder(w).Encode(user)
@@ -174,12 +215,49 @@ func makeGetEndpoint(log *log.Logger, s Service) Controller {
 func makeGetAllEndpoint(log *log.Logger, s Service) Controller {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Println("GET /users")
-		users, err := s.GetAll()
+		v := r.URL.Query()
+		filters := Filters{
+			Firstname: v.Get("firstname"),
+			Lastname:  v.Get("lastname"),
+		}
+
+		limit, _ := strconv.Atoi(v.Get("limit"))
+		page, _ := strconv.Atoi(v.Get("page"))
+
+		count, err := s.Count(filters)
 		if err != nil {
-			w.WriteHeader(400)
-			json.NewEncoder(w).Encode(ErrorRes{err.Error()})
+			w.WriteHeader(500)
+			json.NewEncoder(w).Encode(&Response{
+				Status: 500,
+				Err:    err.Error(),
+			})
 			return
 		}
-		json.NewEncoder(w).Encode(users)
+
+		meta, err := meta.NewMeta(page, limit, count)
+		if err != nil {
+			w.WriteHeader(500)
+			json.NewEncoder(w).Encode(&Response{
+				Status: 500,
+				Err:    err.Error(),
+			})
+			return
+		}
+
+		users, err := s.GetAll(filters, meta.Offset(), meta.Limit())
+		if err != nil {
+			w.WriteHeader(400)
+			json.NewEncoder(w).Encode(&Response{
+				Status: 400,
+				Err:    err.Error(),
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(&Response{
+			Status: 200,
+			Data:   users,
+			Meta:   meta,
+		})
 	}
 }
